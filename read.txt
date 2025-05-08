@@ -1,9 +1,0 @@
-if ModuleNotFoundError: No module named 'discord'  you can install "py -3 -m pip install -U discord.py"
-if ModuleNotFoundError: No module named 'dotenv' please check File extension .Py to .py and notice when run if it still .Py 
-after you change you can use thi command python xnamex.py
-
-use server id for show your slash because in gobal it will show in 1 hr but you use serberid it will show now
-
-
-พอทำการย้าย bin เข้ามาแล้ว
-"pip install yt-dlp"
