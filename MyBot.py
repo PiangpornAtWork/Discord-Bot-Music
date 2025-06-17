@@ -5,14 +5,15 @@ from discord import app_commands
 from dotenv import load_dotenv
 import yt_dlp
 import asyncio
-from collections import deque
+from collections import defaultdict,deque
 
 
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
-SERVER_ID = os.getenv("SERVER_ID")
-SONG_QUEUES={}
+SERVER_ID = os.getenv("SERVER_ID_K")
+SONG_QUEUES = defaultdict(deque)
+# SONG_QUEUES={}
 
 async def search_ytdlp_async(query, ydl_opts):
     loop = asyncio.get_running_loop()
@@ -144,21 +145,21 @@ async def play(interaction: discord.Interaction, song_query:str):
     first_track = tracks[0]
     audio_url = first_track["url"]
     title = first_track.get("title", "Untitled")
-    # duration = f"{first_track['duration'] // 60}:{first_track['duration'] % 60:02}" if 'duration' in first_track else "?:??"
+    duration = f"{first_track['duration'] // 60}:{first_track['duration'] % 60:02}" if 'duration' in first_track else "?:??"
 
 
     guild_id = str(interaction.guild_id)
     if SONG_QUEUES.get(guild_id) is None:
         SONG_QUEUES[guild_id] = deque()
 
-    # SONG_QUEUES[guild_id].append({
-    #     "title": title,
-    #     "url": audio_url,
-    #     "duration": duration,
-    #     "requested_by": interaction.user.display_name
-    # })
+    SONG_QUEUES[guild_id].append({
+        "title": title,
+        "url": audio_url,
+        "duration": duration,
+        "requested_by": interaction.user.display_name
+    })
 
-    SONG_QUEUES[guild_id].append((audio_url, title))
+    # SONG_QUEUES[guild_id].append((audio_url, title))
     if voice_client.is_playing() or voice_client.is_paused():
         await interaction.followup.send(f"Added to queue: **{title}**")
     else:
@@ -168,7 +169,10 @@ async def play(interaction: discord.Interaction, song_query:str):
 
 async def play_next_song(voice_client, guild_id, channel):
     if SONG_QUEUES[guild_id]:
-        audio_url, title = SONG_QUEUES[guild_id].popleft()
+        song = SONG_QUEUES[guild_id].popleft()
+        audio_url = song["url"]
+        title = song["title"]
+
 
         ffmpeg_options = {
             "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
@@ -191,9 +195,9 @@ async def play_next_song(voice_client, guild_id, channel):
         SONG_QUEUES[guild_id] = deque()
 
 
-@bot.tree.command(name="queue", description="Check queue", guild=discord.Object(id=SERVER_ID))
+@bot.tree.command(name="queue", description="Check queue songs", guild=discord.Object(id=SERVER_ID))
 async def check_queue(interaction: discord.Interaction):
-    guild_id = interaction.guild.id
+    guild_id = str(interaction.guild_id)
     queue = SONG_QUEUES.get(guild_id, [])
 
     if not queue:
@@ -205,7 +209,7 @@ async def check_queue(interaction: discord.Interaction):
         for idx, song in enumerate(queue)
     )
 
-    await interaction.response.send_message(f"🎵 **Current Queue:**\n{queue_list}")
+    await interaction.response.send_message(f"**Current Queue:**\n{queue_list}")
 
 
 bot.run(TOKEN)
