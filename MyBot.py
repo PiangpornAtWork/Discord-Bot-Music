@@ -11,7 +11,7 @@ from collections import deque
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
-SERVER_ID =  os.getenv("SERVER_ID_K")
+SERVER_ID = os.getenv("SERVER_ID")
 SONG_QUEUES={}
 
 async def search_ytdlp_async(query, ydl_opts):
@@ -35,13 +35,6 @@ async def on_ready():
     except Exception as e:
         print(f"Sync failed: {e}")
     print(f"{bot.user} is online!")
-
-
-
-@bot.tree.command(name='greet', description="Send a greeting to the user", guild=discord.Object(id=SERVER_ID))
-async def greet(interaction: discord.Interaction):
-    username = interaction.user.mention
-    await interaction.response.send_message(f"Hello there, {username}")
 
 
 @bot.tree.command(name="skip", description="Skips the current playing song",guild=discord.Object(id=SERVER_ID))
@@ -114,8 +107,6 @@ async def stop(interaction: discord.Interaction):
 async def play(interaction: discord.Interaction, song_query:str):
     await interaction.response.defer()
 
-
-
     if interaction.user.voice is None :
         await interaction.followup.send("You must be in a voice channel.")
         return
@@ -134,25 +125,40 @@ async def play(interaction: discord.Interaction, song_query:str):
         "youtube_include_dash_manifest": False,
         "youtube_include_hls_manifest": False,
     }
-
-    query = "ytsearch1: " + song_query
+    
+    song_long = song_query.split("&")
+    song = song_long[0]
+    query = "ytsearch1: " + song
     results = await search_ytdlp_async(query, ydl_options)
-    tracks = results.get("entries", [])
 
-    if tracks is None:
-        await interaction.followup.send("No results found.")
+    if not results or "entries" not in results:
+        await interaction.followup.send("No search results found. Please try a different keyword or link.")
+        return
+
+    tracks = results["entries"]
+  
+    if not tracks:
+        await interaction.followup.send("No songs were found. Please check the link or search query.")
         return
 
     first_track = tracks[0]
     audio_url = first_track["url"]
     title = first_track.get("title", "Untitled")
+    # duration = f"{first_track['duration'] // 60}:{first_track['duration'] % 60:02}" if 'duration' in first_track else "?:??"
+
 
     guild_id = str(interaction.guild_id)
     if SONG_QUEUES.get(guild_id) is None:
         SONG_QUEUES[guild_id] = deque()
 
+    # SONG_QUEUES[guild_id].append({
+    #     "title": title,
+    #     "url": audio_url,
+    #     "duration": duration,
+    #     "requested_by": interaction.user.display_name
+    # })
+
     SONG_QUEUES[guild_id].append((audio_url, title))
-    print(f"url : {audio_url}")
     if voice_client.is_playing() or voice_client.is_paused():
         await interaction.followup.send(f"Added to queue: **{title}**")
     else:
@@ -180,9 +186,26 @@ async def play_next_song(voice_client, guild_id, channel):
         voice_client.play(source, after=after_play)
         asyncio.create_task(channel.send(f"Now playing: **{title}**"))
     else:
-        await voice_client.disconnect()
+        # await voice_client.disconnect()
+        asyncio.create_task(channel.send(f"The list is empty."))
         SONG_QUEUES[guild_id] = deque()
 
+
+@bot.tree.command(name="queue", description="Check queue", guild=discord.Object(id=SERVER_ID))
+async def check_queue(interaction: discord.Interaction):
+    guild_id = interaction.guild.id
+    queue = SONG_QUEUES.get(guild_id, [])
+
+    if not queue:
+        await interaction.response.send_message("The queue is currently empty.")
+        return
+
+    queue_list = "\n".join(
+        f"{idx+1}. {song['title']} ({song['duration']}) - requested by {song['requested_by']}"
+        for idx, song in enumerate(queue)
+    )
+
+    await interaction.response.send_message(f"🎵 **Current Queue:**\n{queue_list}")
 
 
 bot.run(TOKEN)
