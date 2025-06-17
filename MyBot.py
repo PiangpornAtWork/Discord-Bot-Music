@@ -11,7 +11,7 @@ from collections import deque
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
-SERVER_ID = "788391906048606228"
+SERVER_ID =  os.getenv("SERVER_ID_K")
 SONG_QUEUES={}
 
 async def search_ytdlp_async(query, ydl_opts):
@@ -44,6 +44,69 @@ async def greet(interaction: discord.Interaction):
     await interaction.response.send_message(f"Hello there, {username}")
 
 
+@bot.tree.command(name="skip", description="Skips the current playing song",guild=discord.Object(id=SERVER_ID))
+async def skip(interaction: discord.Interaction):
+    if interaction.guild.voice_client and (interaction.guild.voice_client.is_playing() or interaction.guild.voice_client.is_paused()):
+        interaction.guild.voice_client.stop()
+        await interaction.response.send_message("Skipped the current song.")
+    else:
+        await interaction.response.send_message("Not playing anything to skip.")
+
+@bot.tree.command(name="pause", description="Pause the currently playing song.",guild=discord.Object(id=SERVER_ID))
+async def pause(interaction: discord.Interaction):
+    voice_client = interaction.guild.voice_client
+
+    # Check if the bot is in a voice channel
+    if voice_client is None:
+        return await interaction.response.send_message("I'm not in a voice channel.")
+
+    # Check if something is actually playing
+    if not voice_client.is_playing():
+        return await interaction.response.send_message("Nothing is currently playing.")
+    
+    # Pause the track
+    voice_client.pause()
+    await interaction.response.send_message("Playback paused!")
+
+
+@bot.tree.command(name="resume", description="Resume the currently paused song.",guild=discord.Object(id=SERVER_ID))
+async def resume(interaction: discord.Interaction):
+    voice_client = interaction.guild.voice_client
+
+    # Check if the bot is in a voice channel
+    if voice_client is None:
+        return await interaction.response.send_message("I'm not in a voice channel.")
+
+    # Check if it's actually paused
+    if not voice_client.is_paused():
+        return await interaction.response.send_message("I'm not paused right now.")
+    
+    # Resume playback
+    voice_client.resume()
+    await interaction.response.send_message("Playback resumed!")
+
+
+@bot.tree.command(name="stop", description="Stop playback and clear the queue.",guild=discord.Object(id=SERVER_ID))
+async def stop(interaction: discord.Interaction):
+    voice_client = interaction.guild.voice_client
+
+    # Check if the bot is in a voice channel
+    if not voice_client or not voice_client.is_connected():
+        return await interaction.response.send_message("I'm not connected to any voice channel.")
+
+    # Clear the guild's queue
+    guild_id_str = str(interaction.guild_id)
+    if guild_id_str in SONG_QUEUES:
+        SONG_QUEUES[guild_id_str].clear()
+
+    # If something is playing or paused, stop it
+    if voice_client.is_playing() or voice_client.is_paused():
+        voice_client.stop()
+
+    # (Optional) Disconnect from the channel
+    await voice_client.disconnect()
+
+    await interaction.response.send_message("Stopped playback and disconnected!")
 
 
 @bot.tree.command(name='play', description="Paly a song or add it to the queue", guild=discord.Object(id=SERVER_ID))
@@ -104,6 +167,7 @@ async def play_next_song(voice_client, guild_id, channel):
         ffmpeg_options = {
             "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
             "options": "-vn -c:a libopus -b:a 128k",
+            # Remove executable if FFmpeg is in PATH
         }
 
         source = discord.FFmpegOpusAudio(audio_url, **ffmpeg_options, executable="bin\\ffmpeg.exe")
